@@ -1,0 +1,67 @@
+version: 2
+
+builds:
+  - id: pigment
+    main: ./cmd/pigment
+    binary: pigment
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/developerAkX/pigment/internal/version.Version={{.Version}}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    builds:
+      - pigment
+    name_template: "pigment_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: developerAkX
+    name: pigment
+
+brews:
+  - name: pigment
+    repository:
+      owner: developerAkX
+      name: homebrew-tap
+    homepage: "https://github.com/developerAkX/pigment"
+    description: "Image generation/editing CLI powered by your ChatGPT subscription"
+    license: "MIT"
+    install: |
+      bin.install "pigment"
+    test: |
+      system "#{bin}/pigment", "version"
+
+scoops:
+  - name: pigment
+    repository:
+      owner: developerAkX
+      name: scoop-bucket
+    homepage: "https://github.com/developerAkX/pigment"
+    description: "Image generation/editing CLI powered by your ChatGPT subscription"
+    license: "MIT"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
