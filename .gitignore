@@ -1,0 +1,14 @@
+# Build artifacts
+/pigment
+/pigment.exe
+/dist/
+
+# Local generated output
+/assets/
+/outputs/
+
+# OS junk
+.DS_Store
+
+# Editor
+*.swp
