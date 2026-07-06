@@ -84,14 +84,14 @@ func TestCompareSemver(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.a+"_vs_"+tc.b, func(t *testing.T) {
-			got := compareSemver(tc.a, tc.b)
+			got := CompareSemver(tc.a, tc.b)
 			switch {
 			case tc.want > 0 && got <= 0:
-				t.Errorf("compareSemver(%q, %q) = %d, want >0", tc.a, tc.b, got)
+				t.Errorf("CompareSemver(%q, %q) = %d, want >0", tc.a, tc.b, got)
 			case tc.want < 0 && got >= 0:
-				t.Errorf("compareSemver(%q, %q) = %d, want <0", tc.a, tc.b, got)
+				t.Errorf("CompareSemver(%q, %q) = %d, want <0", tc.a, tc.b, got)
 			case tc.want == 0 && got != 0:
-				t.Errorf("compareSemver(%q, %q) = %d, want 0", tc.a, tc.b, got)
+				t.Errorf("CompareSemver(%q, %q) = %d, want 0", tc.a, tc.b, got)
 			}
 		})
 	}

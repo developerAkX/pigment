@@ -47,8 +47,9 @@ func newSkillInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install agent skills to a skill directory",
-		Long: `Install pigment's embedded agent skills (pigment-generate,
-pigment-edit, pigment-style) to an agent skill directory.
+		Long: `Install pigment's embedded agent skill to an agent skill
+directory. Legacy split skills (pigment-generate, pigment-edit,
+pigment-style) installed by older versions are removed automatically.
 
 Targets:
   opencode  ~/.config/opencode/skills/ (default)

@@ -150,6 +150,8 @@ func ParseSSEStream(reader io.Reader, onPhase PhaseCallback) *StreamResult {
 	// Flush any trailing event
 	flushEvent()
 
+	scanErr := scanner.Err()
+
 	// Build sorted event types list
 	for t := range eventTypesSeen {
 		result.EventTypes = append(result.EventTypes, t)
@@ -158,7 +160,12 @@ func ParseSSEStream(reader io.Reader, onPhase PhaseCallback) *StreamResult {
 
 	// Set error message
 	if result.Image == nil {
-		if errorDetail != "" {
+		if scanErr != nil {
+			result.Error = fmt.Sprintf(
+				"error reading response stream: %v (events seen: %s)",
+				scanErr, strings.Join(result.EventTypes, ", "),
+			)
+		} else if errorDetail != "" {
 			result.Error = fmt.Sprintf(
 				"backend failed mid-generation: %s (events seen: %s)",
 				errorDetail, strings.Join(result.EventTypes, ", "),

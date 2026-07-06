@@ -37,14 +37,14 @@ func DetectCodexVersionFrom(path string) string {
 		return FallbackVersion
 	}
 
-	if compareSemver(doc.LatestVersion, FallbackVersion) > 0 {
+	if CompareSemver(doc.LatestVersion, FallbackVersion) > 0 {
 		return doc.LatestVersion
 	}
 	return FallbackVersion
 }
 
-// compareSemver compares two semver strings. Returns >0 if a>b, <0 if a<b, 0 if equal.
-func compareSemver(a, b string) int {
+// CompareSemver compares two semver strings. Returns >0 if a>b, <0 if a<b, 0 if equal.
+func CompareSemver(a, b string) int {
 	pa := parseSemverParts(a)
 	pb := parseSemverParts(b)
 	for i := 0; i < 3; i++ {

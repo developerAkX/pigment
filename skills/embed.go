@@ -1,11 +1,10 @@
 // Package skills embeds the pigment agent skill files and provides
 // installation logic for opencode, claude, and agents skill directories.
 //
-// The skill directories in this package (pigment-generate, pigment-edit,
-// pigment-style) are the single source of truth: they are both embedded
-// into the binary via go:embed and discovered by the skills.sh registry
-// (`npx skills add developerAkX/pigment`) because they live at
-// skills/<name>/SKILL.md in the repository.
+// The skill directory in this package (pigment) is the single source of
+// truth: it is both embedded into the binary via go:embed and discovered
+// by the skills.sh registry (`npx skills add developerAkX/pigment`)
+// because it lives at skills/<name>/SKILL.md in the repository.
 package skills
 
 import (
@@ -19,7 +18,7 @@ import (
 	"github.com/developerAkX/pigment/internal/version"
 )
 
-//go:embed pigment-generate/SKILL.md pigment-edit/SKILL.md pigment-style/SKILL.md
+//go:embed pigment/SKILL.md
 var skillsFS embed.FS
 
 // Stamp is the comment appended to installed SKILL.md files.
@@ -30,7 +29,7 @@ func Stamp() string {
 // SkillInfo describes an embedded skill.
 type SkillInfo struct {
 	Name string
-	Dir  string // relative path inside embed (e.g. "pigment-generate")
+	Dir  string // relative path inside embed (e.g. "pigment")
 }
 
 // List returns all embedded skills.
@@ -131,5 +130,25 @@ func Install(target, dirOverride string, force bool) ([]string, error) {
 		installed = append(installed, destFile)
 	}
 
+	removeLegacySkills(baseDir)
+
 	return installed, nil
+}
+
+// legacySkillNames are skill directories from pigment versions that shipped
+// separate skills instead of the single consolidated "pigment" skill.
+var legacySkillNames = []string{"pigment-generate", "pigment-edit", "pigment-style"}
+
+// removeLegacySkills deletes old pigment-installed skill directories from
+// baseDir. Only directories whose SKILL.md carries the pigment stamp are
+// removed; user-authored files are left untouched.
+func removeLegacySkills(baseDir string) {
+	for _, name := range legacySkillNames {
+		dir := filepath.Join(baseDir, name)
+		content, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+		if err != nil || !strings.Contains(string(content), "<!-- installed by pigment v") {
+			continue
+		}
+		_ = os.RemoveAll(dir)
+	}
 }

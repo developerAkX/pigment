@@ -33,7 +33,10 @@ type GenerateResponse struct {
 func Generate(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
 	codexVersion := auth.DetectCodexVersion()
 
-	resp, err := doRequest(ctx, req, codexVersion)
+	client, transport := newHTTPClient(req.TotalTimeout)
+	defer transport.CloseIdleConnections()
+
+	resp, err := doRequest(ctx, client, req, codexVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -60,11 +63,11 @@ func Generate(ctx context.Context, req *GenerateRequest) (*GenerateResponse, err
 
 		// Persist — warning only on failure
 		if err := auth.PersistRefreshedTokens(refreshResult); err != nil {
-			fmt.Fprintf(warnWriter, "warning: could not persist refreshed token to ~/.codex/auth.json: %v\n", err)
+			fmt.Fprintf(getWarnWriter(), "warning: could not persist refreshed token to ~/.codex/auth.json: %v\n", err)
 		}
 
 		// Retry with new token
-		resp, err = doRequest(ctx, req, codexVersion)
+		resp, err = doRequest(ctx, client, req, codexVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -83,14 +86,24 @@ func Generate(ctx context.Context, req *GenerateRequest) (*GenerateResponse, err
 	}
 
 	// Parse SSE stream with stall timeout
-	stallReader := newStallTimeoutReader(ctx, resp.Body, req.StallTimeout, req.TotalTimeout)
+	stallReader := newStallTimeoutReader(ctx, resp.Body, resp.Body, req.StallTimeout, req.TotalTimeout)
 
-	streamResult := ParseSSEStream(stallReader, req.OnPhase)
+	// Track the last phase on the stall reader so timeout errors can
+	// report where the stream got stuck.
+	onPhase := func(phase string, partialCount int) {
+		stallReader.setPhase(phase)
+		if req.OnPhase != nil {
+			req.OnPhase(phase, partialCount)
+		}
+	}
+	streamResult := ParseSSEStream(stallReader, onPhase)
 
-	if stallReader.err != nil {
+	if readErr, phase, totalExpired := stallReader.state(); readErr != nil {
 		elapsed := time.Since(stallReader.startTime).Seconds()
-		phase := stallReader.lastPhase
-		if stallReader.totalExpired {
+		if phase == "" {
+			phase = "none"
+		}
+		if totalExpired {
 			return nil, fmt.Errorf(
 				"timed out: no image within the %.0fs total budget (last phase: %s, %.1fs elapsed). Raise --timeout for very large images.",
 				req.TotalTimeout.Seconds(), phase, elapsed,
@@ -119,26 +132,16 @@ func Generate(ctx context.Context, req *GenerateRequest) (*GenerateResponse, err
 	}, nil
 }
 
-func doRequest(ctx context.Context, req *GenerateRequest, codexVersion string) (*http.Response, error) {
-	payloadBytes, err := MarshalPayload(req.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
-	}
-
+// newHTTPClient builds a client shared across the initial request and the
+// post-refresh retry, so the retry reuses the same connection pool.
+func newHTTPClient(totalTimeout time.Duration) (*http.Client, *http.Transport) {
 	connectTimeout := 30 * time.Second
-	if req.TotalTimeout < connectTimeout {
-		connectTimeout = req.TotalTimeout
+	if totalTimeout < connectTimeout {
+		connectTimeout = totalTimeout
 	}
 	if connectTimeout < time.Second {
 		connectTimeout = time.Second
 	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", CodexEndpoint, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return nil, fmt.Errorf("network error contacting the image backend: %v", err)
-	}
-
-	SetHeaders(httpReq, req.Tokens, codexVersion)
 
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
@@ -147,10 +150,24 @@ func doRequest(ctx context.Context, req *GenerateRequest, codexVersion string) (
 		DisableCompression: true,
 	}
 
-	client := &http.Client{
+	return &http.Client{
 		Transport: transport,
 		Timeout:   0, // We manage timeout ourselves
+	}, transport
+}
+
+func doRequest(ctx context.Context, client *http.Client, req *GenerateRequest, codexVersion string) (*http.Response, error) {
+	payloadBytes, err := MarshalPayload(req.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", CodexEndpoint, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("network error contacting the image backend: %v", err)
+	}
+
+	SetHeaders(httpReq, req.Tokens, codexVersion)
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -165,8 +182,8 @@ func readBodyPrefix(body io.Reader, maxBytes int) string {
 	return string(buf[:n])
 }
 
-// warnWriter is where warnings go. Defaults to os.Stderr.
-// Can be overridden for testing.
+// warnWriter is where warnings go. Nil until SetWarnWriter is called;
+// getWarnWriter falls back to io.Discard so writes are always safe.
 var warnWriter io.Writer
 
 func getWarnWriter() io.Writer {
@@ -174,10 +191,6 @@ func getWarnWriter() io.Writer {
 		return warnWriter
 	}
 	return io.Discard
-}
-
-func init() {
-	// Import os here to avoid issues; set in SetWarnWriter
 }
 
 // SetWarnWriter sets the writer for warning messages.

@@ -27,7 +27,6 @@ type genFlags struct {
 	noStyle      bool
 	timeout      int
 	stallTimeout int
-	quiet        bool
 	noProgress   bool
 	jsonOutput   bool
 	open         bool
@@ -56,7 +55,6 @@ Reference images can be provided with -i/--ref for image-to-image generation.`,
 	cmd.Flags().BoolVar(&f.noStyle, "no-style", false, "suppress all styles for this run")
 	cmd.Flags().IntVar(&f.timeout, "timeout", 300, "total timeout in seconds")
 	cmd.Flags().IntVar(&f.stallTimeout, "stall-timeout", 120, "stall timeout in seconds")
-	cmd.Flags().BoolVar(&f.quiet, "quiet", false, "suppress update notices")
 	cmd.Flags().BoolVar(&f.noProgress, "no-progress", false, "suppress progress output")
 	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "output JSON instead of path")
 	cmd.Flags().BoolVar(&f.open, "open", false, "open the result in the default viewer")
@@ -99,10 +97,10 @@ func runGen(prompt string, f *genFlags) error {
 	}
 
 	// Resolve active styles
+	styleStore := styles.NewDefaultStore()
 	var activeEntries []styles.ActiveEntry
 	if !f.noStyle {
-		store := styles.NewDefaultStore()
-		doc, loadErr := store.Load()
+		doc, loadErr := styleStore.Load()
 		if loadErr != nil {
 			// Non-fatal: proceed without styles
 			fmt.Fprintf(os.Stderr, "warning: could not load styles: %v\n", loadErr)
@@ -110,7 +108,7 @@ func runGen(prompt string, f *genFlags) error {
 			if len(f.styleNames) > 0 {
 				// Explicit --style flags
 				for _, sn := range f.styleNames {
-					entry, err := store.Get(doc, sn)
+					entry, err := styleStore.Get(doc, sn)
 					if err != nil {
 						return err
 					}
@@ -118,7 +116,7 @@ func runGen(prompt string, f *genFlags) error {
 				}
 			} else {
 				// Use active default set
-				activeEntries = store.ActiveStyles(doc)
+				activeEntries = styleStore.ActiveStyles(doc)
 			}
 		}
 	}
@@ -128,7 +126,6 @@ func runGen(prompt string, f *genFlags) error {
 
 	// Collect refs: character asset refs, ad-hoc --ref (character), style asset refs
 	var refs []*imagegen.RefImage
-	styleStore := styles.NewDefaultStore()
 
 	// 1. Character asset refs (from active styles of kind=character)
 	for _, ae := range activeEntries {
@@ -150,7 +147,7 @@ func runGen(prompt string, f *genFlags) error {
 	// 2. Ad-hoc --ref flags (treated as character/subject refs)
 	if len(f.refs) > 0 {
 		progress.Print(fmt.Sprintf("loading %d reference image(s)", len(f.refs)))
-		loaded, _, err := imagegen.LoadRefs(f.refs, imagegen.RefKindCharacter)
+		loaded, err := imagegen.LoadRefs(f.refs, imagegen.RefKindCharacter)
 		if err != nil {
 			return err
 		}

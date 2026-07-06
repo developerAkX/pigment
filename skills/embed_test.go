@@ -12,28 +12,21 @@ func TestList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
 	}
-	if len(skills) != 3 {
-		t.Fatalf("expected 3 skills, got %d", len(skills))
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill, got %d", len(skills))
 	}
-
-	names := make(map[string]bool)
-	for _, s := range skills {
-		names[s.Name] = true
-	}
-	for _, want := range []string{"pigment-generate", "pigment-edit", "pigment-style"} {
-		if !names[want] {
-			t.Errorf("missing skill %q", want)
-		}
+	if skills[0].Name != "pigment" {
+		t.Errorf("expected skill %q, got %q", "pigment", skills[0].Name)
 	}
 }
 
 func TestReadSkillFile(t *testing.T) {
-	data, err := ReadSkillFile("pigment-generate/SKILL.md")
+	data, err := ReadSkillFile("pigment/SKILL.md")
 	if err != nil {
 		t.Fatalf("ReadSkillFile error: %v", err)
 	}
-	if !strings.Contains(string(data), "pigment-generate") {
-		t.Error("expected content to contain 'pigment-generate'")
+	if !strings.Contains(string(data), "name: pigment") {
+		t.Error("expected content to contain 'name: pigment'")
 	}
 }
 
@@ -43,8 +36,8 @@ func TestInstallToTempDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Install error: %v", err)
 	}
-	if len(installed) != 3 {
-		t.Fatalf("expected 3 installed, got %d", len(installed))
+	if len(installed) != 1 {
+		t.Fatalf("expected 1 installed, got %d", len(installed))
 	}
 
 	// Verify files exist and contain stamp
@@ -63,7 +56,7 @@ func TestInstallOverwriteProtection(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a file that was NOT installed by pigment
-	skillDir := filepath.Join(dir, "pigment-generate")
+	skillDir := filepath.Join(dir, "pigment")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +82,8 @@ func TestInstallOverwriteProtection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Install with force error: %v", err)
 	}
-	if len(installed) != 3 {
-		t.Fatalf("expected 3 installed with force, got %d", len(installed))
+	if len(installed) != 1 {
+		t.Fatalf("expected 1 installed with force, got %d", len(installed))
 	}
 }
 
@@ -108,8 +101,41 @@ func TestInstallOverwriteOwnStamp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Install error: %v", err)
 	}
-	if len(installed) != 3 {
-		t.Fatalf("expected 3 installed on re-install, got %d", len(installed))
+	if len(installed) != 1 {
+		t.Fatalf("expected 1 installed on re-install, got %d", len(installed))
+	}
+}
+
+func TestInstallRemovesLegacySkills(t *testing.T) {
+	dir := t.TempDir()
+
+	stamped := "# old skill\n\n" + Stamp() + "\n"
+	for _, name := range legacySkillNames {
+		legacyDir := filepath.Join(dir, name)
+		if err := os.MkdirAll(legacyDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(legacyDir, "SKILL.md"), []byte(stamped), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A user-authored legacy-named dir without the stamp must survive.
+	userDir := filepath.Join(dir, "pigment-style")
+	if err := os.WriteFile(filepath.Join(userDir, "SKILL.md"), []byte("# mine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Install("opencode", dir, false); err != nil {
+		t.Fatalf("Install error: %v", err)
+	}
+
+	for _, name := range []string{"pigment-generate", "pigment-edit"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("legacy skill %s should have been removed", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(userDir, "SKILL.md")); err != nil {
+		t.Errorf("user-authored pigment-style should survive: %v", err)
 	}
 }
 

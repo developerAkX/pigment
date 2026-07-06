@@ -88,17 +88,17 @@ func LoadRef(source string, kind RefKind) (*RefImage, error) {
 	return ref, nil
 }
 
-// LoadRefs loads multiple reference images and enforces the cap.
-func LoadRefs(sources []string, kind RefKind) ([]*RefImage, []string, error) {
+// LoadRefs loads multiple reference images.
+func LoadRefs(sources []string, kind RefKind) ([]*RefImage, error) {
 	var refs []*RefImage
 	for _, s := range sources {
 		ref, err := LoadRef(s, kind)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		refs = append(refs, ref)
 	}
-	return refs, nil, nil
+	return refs, nil
 }
 
 // EnforceRefCap enforces the 4-ref cap, returning kept and dropped labels.

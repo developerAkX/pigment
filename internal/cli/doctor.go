@@ -134,9 +134,7 @@ func runDoctor() error {
 		fmt.Println("codex backend: ready")
 		return nil
 	}
-	fmt.Println("codex backend: not ready")
-	os.Exit(1)
-	return nil
+	return fmt.Errorf("codex backend: not ready")
 }
 
 func printCheck(useColor bool, r checkResult) {

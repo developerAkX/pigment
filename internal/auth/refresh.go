@@ -51,7 +51,12 @@ func RefreshAccessToken(refreshToken, versionStr, osInfo string) (*RefreshResult
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	// Cap the body read: token responses are small, and this guards
+	// against a misbehaving endpoint streaming unbounded data.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("token refresh failed: reading response: %v", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		var errBody struct {
@@ -104,8 +109,19 @@ func RefreshAccessToken(refreshToken, versionStr, osInfo string) (*RefreshResult
 }
 
 // PersistRefreshedTokens atomically updates auth.json with new tokens.
+// A sidecar lock file serialises concurrent refreshes so two pigment
+// processes cannot interleave read-modify-write and lose a refresh token.
 func PersistRefreshedTokens(result *RefreshResult) error {
-	authPath := AuthFilePath()
+	authPath, err := codexPath("auth.json")
+	if err != nil {
+		return err
+	}
+
+	unlock, err := lockAuthFile(authPath)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 
 	// Read existing file
 	data, err := os.ReadFile(authPath)
@@ -179,4 +195,37 @@ func PersistRefreshedTokens(result *RefreshResult) error {
 
 	tmpPath = "" // prevent deferred cleanup
 	return nil
+}
+
+// lockAuthFile acquires an exclusive sidecar lock next to authPath.
+// It polls for up to lockWait, treats locks older than lockStale as
+// abandoned, and returns a release function.
+func lockAuthFile(authPath string) (func(), error) {
+	const (
+		lockWait  = 3 * time.Second
+		lockStale = 15 * time.Second
+		pollEvery = 50 * time.Millisecond
+	)
+	lockPath := authPath + ".pigment-lock"
+
+	deadline := time.Now().Add(lockWait)
+	for {
+		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			f.Close()
+			return func() { os.Remove(lockPath) }, nil
+		}
+		if !os.IsExist(err) {
+			return nil, fmt.Errorf("acquiring auth.json lock: %w", err)
+		}
+		// Lock exists — remove it if abandoned by a crashed process.
+		if fi, statErr := os.Stat(lockPath); statErr == nil && time.Since(fi.ModTime()) > lockStale {
+			os.Remove(lockPath)
+			continue
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("auth.json is locked by another pigment process (remove %s if stale)", lockPath)
+		}
+		time.Sleep(pollEvery)
+	}
 }

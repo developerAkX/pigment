@@ -17,16 +17,28 @@ type Tokens struct {
 	LastRefresh  time.Time
 }
 
+// codexPath returns the path to a file inside ~/.codex, or an error if
+// the home directory cannot be determined (e.g. $HOME unset in a container).
+func codexPath(file string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory (is $HOME set?): %w", err)
+	}
+	return filepath.Join(home, ".codex", file), nil
+}
+
 // AuthFilePath returns the fixed path to ~/.codex/auth.json.
+// For display purposes; callers that read/write should use codexPath
+// to surface home-directory resolution errors.
 func AuthFilePath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".codex", "auth.json")
+	p, _ := codexPath("auth.json")
+	return p
 }
 
 // VersionFilePath returns the fixed path to ~/.codex/version.json.
 func VersionFilePath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".codex", "version.json")
+	p, _ := codexPath("version.json")
+	return p
 }
 
 // rawAuthFile is the JSON structure of auth.json.
@@ -37,7 +49,11 @@ type rawAuthFile struct {
 
 // LoadTokens reads and parses ~/.codex/auth.json.
 func LoadTokens() (*Tokens, error) {
-	return LoadTokensFrom(AuthFilePath())
+	path, err := codexPath("auth.json")
+	if err != nil {
+		return nil, err
+	}
+	return LoadTokensFrom(path)
 }
 
 // LoadTokensFrom reads and parses auth.json from the given path.

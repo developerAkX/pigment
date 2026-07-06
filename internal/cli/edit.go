@@ -32,7 +32,6 @@ At least one reference image (-i/--ref) is required.`,
 	cmd.Flags().BoolVar(&f.noStyle, "no-style", false, "suppress all styles for this run")
 	cmd.Flags().IntVar(&f.timeout, "timeout", 300, "total timeout in seconds")
 	cmd.Flags().IntVar(&f.stallTimeout, "stall-timeout", 120, "stall timeout in seconds")
-	cmd.Flags().BoolVar(&f.quiet, "quiet", false, "suppress update notices")
 	cmd.Flags().BoolVar(&f.noProgress, "no-progress", false, "suppress progress output")
 	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "output JSON instead of path")
 	cmd.Flags().BoolVar(&f.open, "open", false, "open the result in the default viewer")

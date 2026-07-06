@@ -15,7 +15,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/developerAkX/pigment/internal/auth"
 	"github.com/developerAkX/pigment/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +25,15 @@ import (
 // upgradeBaseURL is the GitHub API base; override for testing.
 var upgradeBaseURL = "https://api.github.com"
 
-const upgradeRepo = "developerAkX/pigment"
+const (
+	upgradeRepo = "developerAkX/pigment"
+	// maxDownloadBytes caps release downloads (binaries are ~10-20MB).
+	maxDownloadBytes = 200 << 20
+)
+
+// upgradeHTTPClient bounds all upgrade-related HTTP calls so a hung
+// server cannot stall the CLI indefinitely.
+var upgradeHTTPClient = &http.Client{Timeout: 5 * time.Minute}
 
 func newUpgradeCmd() *cobra.Command {
 	var checkOnly bool
@@ -54,7 +64,7 @@ type ghAsset struct {
 
 func fetchLatestRelease(baseURL, repo string) (*ghRelease, error) {
 	url := fmt.Sprintf("%s/repos/%s/releases/latest", baseURL, repo)
-	resp, err := http.Get(url)
+	resp, err := upgradeHTTPClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("fetching latest release: %w", err)
 	}
@@ -85,7 +95,7 @@ func runUpgrade(checkOnly bool) error {
 	latest := strings.TrimPrefix(rel.TagName, "v")
 	current := version.Version
 
-	if latest == current {
+	if auth.CompareSemver(latest, current) <= 0 {
 		fmt.Printf("pigment %s is already the latest version.\n", current)
 		return nil
 	}
@@ -181,7 +191,7 @@ func runUpgrade(checkOnly bool) error {
 }
 
 func downloadBytes(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	resp, err := upgradeHTTPClient.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +199,14 @@ func downloadBytes(url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxDownloadBytes {
+		return nil, fmt.Errorf("download from %s exceeds %d bytes", url, maxDownloadBytes)
+	}
+	return data, nil
 }
 
 func sha256sum(data []byte) string {

@@ -96,30 +96,27 @@ pigment edit -i cabin.png "add northern lights in the sky"
 | `pigment auth logout` | Instructions to log out |
 | `pigment version` | Print version |
 | `pigment upgrade` | Upgrade to latest release (`--check` for dry run) |
-| `pigment skill list` | List embedded agent skills |
-| `pigment skill install` | Install agent skills (`--target`, `--dir`, `--force`) |
+| `pigment skill list` | List the embedded agent skill |
+| `pigment skill install` | Install the agent skill (`--target`, `--dir`, `--force`) |
 
-## Agent Skills
+## Agent Skill
 
-Pigment ships three embedded agent skills that teach AI coding assistants
-(opencode, Claude Code, etc.) how to use pigment:
-
-- **pigment-generate** — text-to-image generation
-- **pigment-edit** — image-to-image editing
-- **pigment-style** — style/character library management
+Pigment ships a single embedded agent skill (**pigment**) that teaches AI
+coding assistants (opencode, Claude Code, etc.) how to generate images,
+edit images, and manage the style/character library with pigment.
 
 ### Recommended: `npx skills add`
 
-The skills are published to the [skills.sh](https://skills.sh) registry
-straight from this repository. Install all three into your agent with:
+The skill is published to the [skills.sh](https://skills.sh) registry
+straight from this repository. Install it into your agent with:
 
 ```bash
 # Install for opencode (globally, no prompts)
-npx skills add developerAkX/pigment --skill '*' --agent opencode --global --yes
+npx skills add developerAkX/pigment --agent opencode --global --yes
 
-# Or pick specific skills / agents
-npx skills add developerAkX/pigment --skill pigment-generate --agent claude-code
-npx skills add developerAkX/pigment --all      # every skill, every detected agent
+# Or other agents
+npx skills add developerAkX/pigment --agent claude-code
+npx skills add developerAkX/pigment --all      # every detected agent
 ```
 
 Supported agents include opencode, claude-code, cursor, codex, github-copilot,
@@ -127,7 +124,8 @@ windsurf, gemini, and more.
 
 ### Alternative: embedded installer
 
-The binary also carries the skills, so you can install them offline:
+The binary also carries the skill, so you can install it offline
+(this also cleans up the legacy split skills from older versions):
 
 ```bash
 pigment skill install                 # opencode (default)
